@@ -1,0 +1,43 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+substitutions:
+  _REGION: us-central1
+  _REPOSITORY: docker-repo            # Artifact Registry repo name
+  _SERVICE: prepmind-api              # Cloud Run service name
+  _AR_HOST: us-central1-docker.pkg.dev
+  _CORS_ORIGIN: https://prepmind.org,https://www.prepmind.org
+  _RUN_SA: run-prepmind               # Cloud Run runtime Service Account (created once)
+
+steps:
+# Auth docker to Artifact Registry
+- name: gcr.io/cloud-builders/gcloud
+  entrypoint: bash
+  args:
+    - -c
+    - |
+      gcloud auth configure-docker ${_AR_HOST} -q
+      IMAGE="${_AR_HOST}/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}"
+      echo "Building ${IMAGE}:${SHORT_SHA}"
+      docker build -t "${IMAGE}:${SHORT_SHA}" .
+
+# Push image
+- name: gcr.io/cloud-builders/docker
+  args: ["push", "${_AR_HOST}/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}"]
+
+# Deploy to Cloud Run with secrets + env
+- name: gcr.io/cloud-builders/gcloud
+  args:
+    [
+      "run","deploy","${_SERVICE}",
+      "--image","${_AR_HOST}/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}",
+      "--region","${_REGION}",
+      "--platform","managed",
+      "--allow-unauthenticated",
+      "--service-account","${_RUN_SA}@${PROJECT_ID}.iam.gserviceaccount.com",
+      "--set-secrets","GEMINI_API_KEY=GEMINI_API_KEY:latest,TOGETHER_API_KEY=TOGETHER_API_KEY:latest",
+      "--set-env-vars","CORS_ORIGIN=${_CORS_ORIGIN},NODE_ENV=production"
+    ]
+
+images:
+  - "${_AR_HOST}/${PROJECT_ID}/${_REPOSITORY}/${_SERVICE}:${SHORT_SHA}"

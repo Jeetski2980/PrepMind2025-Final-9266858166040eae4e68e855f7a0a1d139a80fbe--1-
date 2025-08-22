@@ -1,0 +1,15 @@
+# Git & local junk
+.git
+.gitignore
+.DS_Store
+
+# Dependencies & build outputs
+node_modules
+client/node_modules
+server/node_modules
+dist
+build
+
+# Env files
+.env
+.env.*
